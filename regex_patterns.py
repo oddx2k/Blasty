@@ -1,12 +1,13 @@
 import re
 
-value_token = re.compile(r'%[sS]%')
 token = re.compile(r'%(.*?)%')
-reval = re.compile(r'\((.*?)\)')
-cleanup = re.compile(r',?%(WAIT\d+|TIME\d+|EVAL.*?)%,?')
-hex_dec = re.compile(r'HEX([0-9A-F]*?)HEX')
-mod = re.compile(r'MOD', re.IGNORECASE)
+var_token = re.compile(r'#(.*?)#', re.IGNORECASE)
 eval_filter = re.compile(r'[^0-9%*/+-.()]')
+hex_filter = re.compile(r'^[0-9a-fA-F]+$')
+reval = re.compile(r'\((.*?)\)')
 extra_comma = re.compile(r',+')
+cleanup = re.compile(r',?%(WAIT\d+|TIME\d+|EVAL.*?)%,?')
 player = re.compile(r'^P(?:layer)*(\d)|$')
 output_split = re.compile(' = |=')
+remap = re.compile(r'(\d+)TO(\d+)')
+mod = re.compile(r'MOD', re.IGNORECASE)

@@ -24,7 +24,7 @@ class Device:
         self.output_queue = queue.Queue()
         self.send_queue = queue.Queue()
         self.block = []
-
+        self.temp_vars = {}
         self.enabled = True
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
         self.t1 = self.pool.submit(self.process_output_queue)
@@ -35,36 +35,138 @@ class Device:
                        'cmr', 'cmw', 'lds', 'sds', 'sdf', 'sbf', 'ibf', 'bmo', 'cpy', 'kll', 'log', 'nll', 'wat', 'rfs',
                        'lop', 'lfs', 'kls', 'lwa', 'cmd', 'cdw', 'qut', 'ref', '']
 
-    def compute(self, exp):
-        match = regex_patterns.hex_dec.search(exp)
-        while match is not None:
-            exp = regex_patterns.hex_dec.sub(str(int(match.group(1), 16)), exp, 1)
-            match = regex_patterns.hex_dec.search(exp)
+    def compute(self, exp, val):
+        exp = self.sub_var_tokens(exp, val)
         exp = regex_patterns.mod.sub(r'%', exp)
         exp = regex_patterns.eval_filter.sub('', exp)
         return int(eval(exp))
 
+    def put_var(self, name, value):
+        if name not in self.temp_vars:
+            self.temp_vars[name] = {}
+
+        if "values" not in self.temp_vars[name]:
+            self.temp_vars[name]['values'] = [value]
+        else:
+            if value not in self.temp_vars[name]['values']:
+                self.temp_vars[name]['values'].append(value)
+
+        if "last" in self.temp_vars[name]:
+            last = int(self.temp_vars[name]['last'])
+            if int(value) + 1 < last or int(value) - 1 > last and int(value) > 0:
+                self.temp_vars[name]['values'] = [value]
+
+        self.temp_vars[name]['last'] = value
+
+    def get_var(self, name):
+        if name in self.temp_vars and "last" in self.temp_vars[name]:
+            return self.temp_vars[name]["last"]
+        return 0
+
+    def get_var_max(self, name):
+        if name in self.temp_vars and "values" in self.temp_vars[name]:
+            return max([int(value) for value in self.temp_vars[name]["values"]])
+        return 0
+
+    def get_var_min(self, name):
+        if name in self.temp_vars and "values" in self.temp_vars[name]:
+            return min([int(value) for value in self.temp_vars[name]["values"]])
+        return 0
+
+    def var_color_wheel(self, clw, var_max, val):
+        def lerp(start, end, v):
+            return start + v * (end - start)
+
+        def transition(i, n=2):
+            return list(zip(*(i[p:] for p in range(n))))
+
+        def hex_rgb(color):
+            return tuple(int(color[i:i + 2], 16) for i in (0, 2, 4))
+
+        def rgb_hex(r, g, b):
+            return '{:02X}{:02X}{:02X}'.format(r, g, b)
+
+        transitions = transition(clw, 2)
+
+        t = len(transitions)/int(var_max) * (int(var_max) - int(val))
+
+        return rgb_hex(int(lerp(hex_rgb(transitions[int(t)][0])[0], hex_rgb(transitions[int(t)][1])[0], t - int(t))),
+                       int(lerp(hex_rgb(transitions[int(t)][0])[1], hex_rgb(transitions[int(t)][1])[1], t - int(t))),
+                       int(lerp(hex_rgb(transitions[int(t)][0])[2], hex_rgb(transitions[int(t)][1])[2], t - int(t))))
+
+    def sub_var_tokens(self, out, val):
+        match = regex_patterns.var_token.search(out)
+        while match is not None:
+            match match.group(0):
+                case _ if match.group(0) in ['#s#', '#S#']:
+                    out = regex_patterns.var_token.sub(val, out, 1)
+
+                case _ if match.group(1)[:3] == 'HEX':
+                    var_hex = str(int(match.group(1)[3:], 16))
+                    out = regex_patterns.var_token.sub(var_hex, out, 1)
+
+                case _ if match.group(1)[:3] == 'MAX':
+                    var_max = str(self.get_var_max(match.group(1)[3:]))
+                    out = regex_patterns.var_token.sub(var_max, out, 1)
+
+                case _ if match.group(1)[:3] == 'MIN':
+                    var_min = str(self.get_var_min(match.group(1)[3:]))
+                    out = regex_patterns.var_token.sub(var_min, out, 1)
+
+                case _ if match.group(1)[:3] == 'VAR':
+                    self.put_var(match.group(1)[3:], val)
+                    out = regex_patterns.var_token.sub('', out, 1)
+
+                case _ if match.group(1)[:3] == 'CLW':
+                    var_clw = match.group(1)[3:].split(':')
+                    var_max = self.get_var_max(var_clw.pop(0))
+                    var_clw = [v for v in var_clw if regex_patterns.hex_filter.match(v) and
+                               len(regex_patterns.hex_filter.match(v).group(0)) == 6]
+                    color = 0
+                    if var_max:
+                        color = str(int(self.var_color_wheel(var_clw, var_max, val), 16))
+                    out = regex_patterns.var_token.sub(color, out, 1)
+
+                case _:
+                    pass
+
+            match = regex_patterns.var_token.search(out)
+        return out
+
     def sub_tokens(self, output, value):
         out = self.get_output(self.output_config, output, value)
-        out = regex_patterns.value_token.sub(value, out)
+        # print(out)
         match = regex_patterns.token.search(out)
         while match is not None:
             match match.group(0):
-                case _ if match.group(1)[:4] == 'EVAL':
-                    v = self.compute(match.group(1)[4:])
+                case _ if match.group(1)[:3] == 'RMP':
+                    remap = regex_patterns.remap.search(match.group(1)[3:])
+                    if remap is not None and remap.group(1) == value:
+                        new = self.get_output(self.full_config, output, remap.group(2))
+                        if 'RMP' not in new:
+                            out = new
+                    out = regex_patterns.token.sub('', out, 1)
+
+                case _ if match.group(1)[:3] == 'EVL':
+                    v = self.compute(match.group(1)[3:], value)
                     new = self.get_output(self.full_config, output, v)
                     if 'EVAL' not in new:
                         out = regex_patterns.token.sub(new, out, 1)
                     else:
                         out = regex_patterns.token.sub(self.get_output(self.full_config, output, 0), out, 1)
-                case _ if match.group(1)[:5] == 'REVAL':
-                    v = self.compute(match.group(1)[5:])
+
+                case _ if match.group(1)[:3] == 'RVL':
+                    v = self.compute(match.group(1)[3:], value)
                     out = regex_patterns.token.sub(str(v), out, 1)
+
                 case _ if regex_patterns.cleanup.search(match.group(0)):
                     out = regex_patterns.cleanup.sub(r',(\1),', out)
+
                 case _:
                     out = regex_patterns.token.sub(self.get_output(self.full_config, match.group(1), value), out, 1)
-            out = regex_patterns.value_token.sub(value, out)
+
+            out = self.sub_var_tokens(out, value)
+            # print(out)
             match = regex_patterns.token.search(out)
         out = regex_patterns.extra_comma.sub(r',', out)
         return out
@@ -75,7 +177,7 @@ class Device:
         return config[output].split('|')[-1]
 
     def get_window_time(self):
-        return time.perf_counter_ns() + (self.max_rate * 1000000000 / 2)
+        return time.perf_counter_ns() + (self.max_rate * 1000000000 / 10)
 
     def process_output_queue(self):
         try:
@@ -113,6 +215,7 @@ class Device:
                                 continue
 
                             out = self.sub_tokens(output, value)
+                        print(out)
 
                         if not out:
                             continue
