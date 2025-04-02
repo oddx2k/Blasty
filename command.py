@@ -22,7 +22,7 @@ class Command:
         except (OSError, serial.SerialTimeoutException):
             self.comm.close()
             self.comm.open()
-            print('Serial COM REOPENED')
+            print(self.comm.port, 'REOPENED')
         # print(self.get_age())
 
     def get_age(self):

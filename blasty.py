@@ -11,7 +11,6 @@ from configuration import get_config, update_config, get_game_config, update_gam
 from devices import Device
 from serial.tools import list_ports
 
-
 HOST = "127.0.0.1"
 PORT = 8000
 
@@ -56,23 +55,28 @@ def main():
             print(getattr(e, 'message', repr(e)))
 
         conf = get_config()
-        DEVICES = [Device(conf[device]['ID'],
-                          conf[device]['PORT'],
-                          conf[device]['PROFILE'],
-                          {
-                              'baudrate': conf[device]['BAUDRATE'] or 9600,
-                              'bytesize': conf[device]['BYTESIZE'] or serial.EIGHTBITS,
-                              'parity': conf[device]['PARITY'] or serial.PARITY_NONE,
-                              'stopbits': conf[device]['STOPBITS'] or serial.STOPBITS_ONE,
-                              'timeout': conf[device]['TIMEOUT'] or 0.1,
-                              'rtscts': conf[device]['RTSCTS'] or False,
-                              'dsrdtr': conf[device]['DSRDTR'] or False,
-                          }) for device in conf
-                   if conf[device]['ID'] and conf[device]['PORT'] and conf[device]['PROFILE'] and
-                   conf[device]['PORT'] in [port.device for port in list_ports.comports()]]
+        DEVICES = [device for device in
+                   [Device(conf[device]['ID'],
+                           conf[device]['PROFILE'],
+                           {
+                               'port': conf[device]['PORT'] or "",
+                               'baudrate': conf[device]['BAUDRATE'] or 9600,
+                               'bytesize': conf[device]['BYTESIZE'] or serial.EIGHTBITS,
+                               'parity': conf[device]['PARITY'] or serial.PARITY_NONE,
+                               'stopbits': conf[device]['STOPBITS'] or serial.STOPBITS_ONE,
+                               'timeout': conf[device]['TIMEOUT'] or 0.1,
+                               'rtscts': conf[device]['RTSCTS'] or False,
+                               'dsrdtr': conf[device]['DSRDTR'] or False,
+                           },
+                           conf[device]['MONITOR'],
+                           ) for device in conf
+                    if conf[device]['ID'] and conf[device]['PORT'] and conf[device]['PROFILE'] and
+                    conf[device]['PORT'] in [port.device for port in list_ports.comports()]]
+                   if device.comm is not None]
 
         for device in DEVICES:
-            update_game_config(get_game_config('default'), 'default', device.profile, default=True)
+            update_game_config(get_game_config('default', device.profile), 'default', device.profile, default=True)
+
         game = None
 
         with (socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s):
@@ -106,7 +110,8 @@ def main():
                             if game:
                                 for device in DEVICES:
                                     device.stop()
-                                update_game_config(get_game_config(game['name']), game['name'], outputs=game['known_outputs'])
+                                update_game_config(get_game_config(game['name']), game['name'],
+                                                   outputs=game['known_outputs'])
                         case 'mame_stop':
                             pass
                         case 'pause':

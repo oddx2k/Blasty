@@ -18,6 +18,8 @@ def default_config():
     for player in range(1, 5):
         defaults['Player' + str(player)] = {
             'ID': '',
+            'PROFILE': '',
+            'MONITOR': '',
             'PORT': '',
             'BAUDRATE': '',
             'BYTESIZE': '',
@@ -26,7 +28,6 @@ def default_config():
             'TIMEOUT': '',
             'RTSCTS': '',
             'DSRDTR': '',
-            'PROFILE': '',
         }
     return defaults
 
@@ -41,6 +42,7 @@ def default_game_config():
         'OnRotate': '',
         'OnPause': '',
         'MaxRate': '',
+        'Monitor': '',
     }
     defaults['KeyStates'] = {
         'RefreshTime': '',
@@ -77,8 +79,8 @@ def update_game_config(config, name, profile="", outputs=None, default=False):
         config_base = default_game_config()
     else:
         config_base = read_config(os.path.join('config', profile, 'default' + '.ini')) or default_game_config()
-    config_file = os.path.join('config', profile, name + '.ini')
 
+    config_file = os.path.join('config', profile, name + '.ini')
     updated = False
     for section in config_base:
         if section not in config:

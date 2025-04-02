@@ -9,10 +9,10 @@ from command import Command
 
 
 class Device:
-    def __init__(self, player, port, profile, init):
+    def __init__(self, player, profile, init, monitor=False):
         self.player = player
-        self.port = port
         self.profile = profile
+        self.monitor = monitor
         self.init = init
         self.comm = self.open_com()
         self.full_config = {}
@@ -95,6 +95,9 @@ class Device:
                        int(lerp(hex_rgb(transitions[int(t)][0])[2], hex_rgb(transitions[int(t)][1])[2], t - int(t))))
 
     def sub_var_tokens(self, out, val):
+        if self.monitor and self.general_config['Monitor'] is True:
+            print(out)
+
         match = regex_patterns.var_token.search(out)
         while match is not None:
             match match.group(0):
@@ -128,14 +131,21 @@ class Device:
                     out = regex_patterns.var_token.sub(color, out, 1)
 
                 case _:
-                    pass
+                    out = regex_patterns.var_token.sub('', out, 1)
 
             match = regex_patterns.var_token.search(out)
+
+        if self.monitor and self.general_config['Monitor'] is True:
+            print(out)
+
         return out
 
     def sub_tokens(self, output, value):
         out = self.get_output(self.output_config, output, value)
-        # print(out)
+
+        if self.monitor and self.general_config['Monitor'] is True:
+            print(out)
+
         match = regex_patterns.token.search(out)
         while match is not None:
             match match.group(0):
@@ -163,15 +173,20 @@ class Device:
                     out = regex_patterns.cleanup.sub(r',(\1),', out)
 
                 case _:
-                    out = regex_patterns.token.sub(self.get_output(self.full_config, match.group(1), value), out, 1)
+                    out = regex_patterns.token.sub(self.get_output(self.full_config, match.group(1), value) or '', out, 1)
 
             out = self.sub_var_tokens(out, value)
-            # print(out)
             match = regex_patterns.token.search(out)
         out = regex_patterns.extra_comma.sub(r',', out)
+
+        if self.monitor and self.general_config['Monitor'] is True:
+            print(out)
+
         return out
 
     def get_output(self, config, output, value):
+        if output not in config:
+            return None
         if len(config[output].split('|')) > int(value):
             return config[output].split('|')[int(value)]
         return config[output].split('|')[-1]
@@ -211,11 +226,14 @@ class Device:
                             # print(output, value)
 
                             if output not in self.output_config:
-                                # print(output, value)
+                                if self.monitor and self.general_config['Monitor'] is True:
+                                    print(output, value)
                                 continue
 
+                            if self.monitor and self.general_config['Monitor'] is True:
+                                print(output, value)
+
                             out = self.sub_tokens(output, value)
-                        print(out)
 
                         if not out:
                             continue
@@ -286,11 +304,20 @@ class Device:
         self.enabled = bool(val)
 
     def open_com(self):
-        if self.port not in [port.device for port in list_ports.comports()]:
-            print("WARNING:", self.port, "NOT FOUND")
+        if self.init['port'] not in [port.device for port in list_ports.comports()]:
+            print("WARNING:", self.init['port'], "NOT FOUND")
             return
         try:
-            ser = serial.Serial(self.port, int(self.init['baudrate']), int(self.init['bytesize']), self.init['parity'], int(self.init['stopbits']), float(self.init['timeout']), rtscts=bool(self.init['rtscts']), dsrdtr=bool(self.init['dsrdtr']))
+            ser = serial.Serial()
+            ser.port = self.init['port']
+            ser.baudrate = int(self.init['baudrate'])
+            ser.bytesize = int(self.init['bytesize'])
+            ser.parity = self.init['parity']
+            ser.stopbits = int(self.init['stopbits'])
+            ser.timeout = float(self.init['timeout'])
+            ser.rtscts = bool(self.init['rtscts'])
+            ser.dsrdtr = bool(self.init['dsrdtr'])
+            ser.open()
             return ser
         except Exception as e:
             print(getattr(e, 'message', repr(e)))
