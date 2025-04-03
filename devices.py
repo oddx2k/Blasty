@@ -9,10 +9,10 @@ from command import Command
 
 
 class Device:
-    def __init__(self, player, profile, init, monitor=False):
-        self.player = player
+    def __init__(self, player_id, profile, init, monitor=0):
+        self.player_id = player_id
         self.profile = profile
-        self.monitor = monitor
+        self.monitor = bool(int(monitor))
         self.init = init
         self.comm = self.open_com()
         self.full_config = {}
@@ -65,12 +65,16 @@ class Device:
 
     def get_var_max(self, name):
         if name in self.temp_vars and "values" in self.temp_vars[name]:
-            return max([int(value) for value in self.temp_vars[name]["values"]])
+            values = [int(value) for value in self.temp_vars[name]["values"] if value.isnumeric()]
+            if values:
+                return max(values)
         return 0
 
     def get_var_min(self, name):
         if name in self.temp_vars and "values" in self.temp_vars[name]:
-            return min([int(value) for value in self.temp_vars[name]["values"]])
+            values = [int(value) for value in self.temp_vars[name]["values"] if value.isnumeric()]
+            if values:
+                return min(values)
         return 0
 
     def var_color_wheel(self, clw, var_max, val):
@@ -86,17 +90,23 @@ class Device:
         def rgb_hex(r, g, b):
             return '{:02X}{:02X}{:02X}'.format(r, g, b)
 
+        if clw is None:
+            return 0
+
+        if len(clw) == 1:
+            return clw[0]
+
         transitions = transition(clw, 2)
 
-        t = len(transitions)/int(var_max) * (int(var_max) - int(val))
+        t = len(transitions) / int(var_max) * (int(var_max) - int(val))
 
         return rgb_hex(int(lerp(hex_rgb(transitions[int(t)][0])[0], hex_rgb(transitions[int(t)][1])[0], t - int(t))),
                        int(lerp(hex_rgb(transitions[int(t)][0])[1], hex_rgb(transitions[int(t)][1])[1], t - int(t))),
                        int(lerp(hex_rgb(transitions[int(t)][0])[2], hex_rgb(transitions[int(t)][1])[2], t - int(t))))
 
     def sub_var_tokens(self, out, val):
-        if self.monitor and self.general_config['Monitor'] is True:
-            print(out)
+        if self.monitor and bool(int(self.general_config['Monitor'])):
+            print(self.init['port'], out)
 
         match = regex_patterns.var_token.search(out)
         while match is not None:
@@ -127,24 +137,24 @@ class Device:
                                len(regex_patterns.hex_filter.match(v).group(0)) == 6]
                     color = 0
                     if var_max:
-                        color = str(int(self.var_color_wheel(var_clw, var_max, val), 16))
-                    out = regex_patterns.var_token.sub(color, out, 1)
+                        color = int(self.var_color_wheel(var_clw, var_max, val), 16)
+                    out = regex_patterns.var_token.sub(str(color), out, 1)
 
                 case _:
                     out = regex_patterns.var_token.sub('', out, 1)
 
             match = regex_patterns.var_token.search(out)
 
-        if self.monitor and self.general_config['Monitor'] is True:
-            print(out)
+        if self.monitor and bool(int(self.general_config['Monitor'])):
+            print(self.init['port'], out)
 
         return out
 
     def sub_tokens(self, output, value):
         out = self.get_output(self.output_config, output, value)
 
-        if self.monitor and self.general_config['Monitor'] is True:
-            print(out)
+        if self.monitor and bool(int(self.general_config['Monitor'])):
+            print(self.init['port'], out)
 
         match = regex_patterns.token.search(out)
         while match is not None:
@@ -179,8 +189,8 @@ class Device:
             match = regex_patterns.token.search(out)
         out = regex_patterns.extra_comma.sub(r',', out)
 
-        if self.monitor and self.general_config['Monitor'] is True:
-            print(out)
+        if self.monitor and bool(int(self.general_config['Monitor'])):
+            print(self.init['port'], out)
 
         return out
 
@@ -192,20 +202,20 @@ class Device:
         return config[output].split('|')[-1]
 
     def get_window_time(self):
-        return time.perf_counter_ns() + (self.max_rate * 1000000000 / 10)
+        return time.perf_counter_ns() + (self.max_rate * 1000000000 * .25)
 
     def process_output_queue(self):
         try:
-            wait_queue = {}
+            time_queue = {}
             while True:
                 window_time = self.get_window_time()
-                if wait_queue or not self.output_queue.empty():
+                if time_queue or not self.output_queue.empty():
                     window_queue = queue.Queue()
                     ready_queue = queue.Queue()
                     block_list = []
 
-                    if wait_queue:
-                        for c in list(wait_queue):
+                    if time_queue:
+                        for c in list(time_queue):
                             if time.perf_counter_ns() > int(c):
                                 ready_queue.put(c)
 
@@ -219,19 +229,18 @@ class Device:
 
                         if not ready_queue.empty():
                             data_time = time.perf_counter_ns()
-                            out = wait_queue.pop(ready_queue.get())
+                            out = time_queue.pop(ready_queue.get())
 
                         elif not window_queue.empty():
                             output, value, data_time = window_queue.get()
-                            # print(output, value)
 
                             if output not in self.output_config:
-                                if self.monitor and self.general_config['Monitor'] is True:
-                                    print(output, value)
+                                if self.monitor and bool(int(self.general_config['Monitor'])):
+                                    print(self.init['port'], output, value)
                                 continue
 
-                            if self.monitor and self.general_config['Monitor'] is True:
-                                print(output, value)
+                            if self.monitor and bool(int(self.general_config['Monitor'])):
+                                print(self.init['port'], output, value)
 
                             out = self.sub_tokens(output, value)
 
@@ -239,7 +248,6 @@ class Device:
                             continue
 
                         if out in block_list:
-                            # print(out, 'already in queue to send')
                             continue
 
                         block_list.append(out)
@@ -251,13 +259,21 @@ class Device:
                                     match match.group(1):
                                         case _ if match.group(1)[:4] == 'WAIT':
                                             self.block.append(output)
-                                            time.sleep(int(match.group(1)[4:]) / 1000)
+                                            time.sleep(int(match.group(1)[4:]) * .001)
                                             self.block.remove(output)
+                                            continue
                                         case _ if match.group(1)[:4] == 'TIME':
-                                            wait_queue[time.perf_counter_ns() + int(match.group(1)[4:]) * 1000000] = ",".join(out.split(',')[i + 1:])
+                                            time_queue[time.perf_counter_ns() + int(match.group(1)[4:]) * 1000000] = ",".join(out.split(',')[i + 1:])
+                                        case _ if match.group(1)[:4] == 'TIMR':
+                                            rem = ",".join(out.split(',')[i + 1:])
+                                            for c in list(time_queue):
+                                                if time_queue[c] == rem:
+                                                    del time_queue[c]
+
+                                            time_queue[time.perf_counter_ns() + int(match.group(1)[4:]) * 1000000] = ",".join(out.split(',')[i + 1:])
                                         case _:
                                             pass
-                                    continue
+                                    break
 
                                 if self.enabled:
                                     self.add_to_send_queue(Command(self.comm, o, window_time, data_time))
@@ -271,7 +287,7 @@ class Device:
             return
         self.output_queue.put((out, val, data_time))
         if not self.t1.running():
-            print('RESTARTING t1', self.player)
+            print('RESTARTING t1', str(self.player_id))
             self.t1 = self.pool.submit(self.process_output_queue)
 
     def process_send_queue(self):
@@ -287,7 +303,7 @@ class Device:
     def add_to_send_queue(self, command):
         self.send_queue.put(command)
         if not self.t2.running():
-            print('RESTARTING t2', self.player)
+            print('RESTARTING t2', str(self.player_id))
             self.t2 = self.pool.submit(self.process_send_queue)
 
     def start(self):
@@ -318,9 +334,12 @@ class Device:
             ser.rtscts = bool(self.init['rtscts'])
             ser.dsrdtr = bool(self.init['dsrdtr'])
             ser.open()
-            return ser
+            if ser.is_open:
+                return ser
         except Exception as e:
             print(getattr(e, 'message', repr(e)))
+
+        return None
 
     def load_config(self, name):
         config = get_game_config(name, self.profile)
@@ -330,4 +349,4 @@ class Device:
                                   config['KeyStates'][key]}
         self.output_config = {key: config['Output'][key] for key in config['Output'] if config['Output'][key]
                               if not regex_patterns.player.match(key) or
-                              key[:2] == "P" + self.player or key[:7] == "Player" + self.player}
+                              key[:2] == "P" + str(self.player_id) or key[:7] == "Player" + str(self.player_id)}

@@ -17,8 +17,8 @@ class Command:
         if self.serial_command is None:
             return
         try:
-            # print(bytes(self.serial_command.encode()))
             self.comm.write(bytes(self.serial_command.encode()))
+            # tmp = self.comm.readline()
         except (OSError, serial.SerialTimeoutException):
             self.comm.close()
             self.comm.open()

@@ -56,7 +56,7 @@ def main():
 
         conf = get_config()
         DEVICES = [device for device in
-                   [Device(conf[device]['ID'],
+                   [Device(conf[device]['ID'] or 0,
                            conf[device]['PROFILE'],
                            {
                                'port': conf[device]['PORT'] or "",
@@ -70,7 +70,7 @@ def main():
                            },
                            conf[device]['MONITOR'],
                            ) for device in conf
-                    if conf[device]['ID'] and conf[device]['PORT'] and conf[device]['PROFILE'] and
+                    if conf[device]['PORT'] and conf[device]['PROFILE'] and
                     conf[device]['PORT'] in [port.device for port in list_ports.comports()]]
                    if device.comm is not None]
 

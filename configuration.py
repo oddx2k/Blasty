@@ -16,18 +16,18 @@ def default_config():
     defaults = ConfigParser(comment_prefixes='/', allow_no_value=True)
     defaults.optionxform = str
     for player in range(1, 5):
-        defaults['Player' + str(player)] = {
+        defaults['Lightgun' + str(player)] = {
             'ID': '',
             'PROFILE': '',
-            'MONITOR': '',
+            'MONITOR': 0,
             'PORT': '',
-            'BAUDRATE': '',
-            'BYTESIZE': '',
-            'PARITY': '',
-            'STOPBITS': '',
-            'TIMEOUT': '',
-            'RTSCTS': '',
-            'DSRDTR': '',
+            'BAUDRATE': 9600,
+            'BYTESIZE': 8,
+            'PARITY': 'N',
+            'STOPBITS': 1,
+            'TIMEOUT': .01,
+            'RTSCTS': True,
+            'DSRDTR': True,
         }
     return defaults
 
@@ -42,7 +42,7 @@ def default_game_config():
         'OnRotate': '',
         'OnPause': '',
         'MaxRate': '',
-        'Monitor': '',
+        'Monitor': 0,
     }
     defaults['KeyStates'] = {
         'RefreshTime': '',
