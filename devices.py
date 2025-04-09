@@ -103,6 +103,22 @@ class Device:
                        int(lerp(hex_rgb(transitions[int(t)][0])[1], hex_rgb(transitions[int(t)][1])[1], t - int(t))),
                        int(lerp(hex_rgb(transitions[int(t)][0])[2], hex_rgb(transitions[int(t)][1])[2], t - int(t))))
 
+    def skip_value(self, out, val):
+        match = regex_patterns.skip.search(out)
+        while match is not None:
+            var_skp = match.group(2).split(':')
+            if val in var_skp:
+                out = regex_patterns.skip.sub('', out, 1)
+            else:
+                out = regex_patterns.skip.sub(match.group(1), out, 1)
+
+            match = regex_patterns.skip.search(out)
+
+            if self.monitor and bool(int(self.general_config['Monitor'])):
+                print(self.init['port'], out)
+
+        return out
+
     def sub_var_tokens(self, out, val):
         # if self.monitor and bool(int(self.general_config['Monitor'])):
         #     print(self.init['port'], out)
@@ -155,6 +171,7 @@ class Device:
         if self.monitor and bool(int(self.general_config['Monitor'])):
             print(self.init['port'], out)
 
+        out = self.skip_value(out, value)
         out = self.sub_var_tokens(out, value)
         match = regex_patterns.token.search(out)
         while match is not None:
@@ -185,6 +202,7 @@ class Device:
                 case _:
                     out = regex_patterns.token.sub(self.get_output(self.full_config, match.group(1), value) or '', out, 1)
 
+            out = self.skip_value(out, value)
             out = self.sub_var_tokens(out, value)
             match = regex_patterns.token.search(out)
         out = regex_patterns.extra_comma.sub(r',', out)

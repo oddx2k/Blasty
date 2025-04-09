@@ -8,8 +8,7 @@ translates outputs into serial commands and relays those to the device. It's cur
 Devices are configured with profiles, you can name the profiles whatever you want. Configuration files will be put in a folder named after the profile name. A game may have configuration files in multiple profiles allowing you to configure how each device attached to that profile responds to the outputs. <br>
 Each device maintains its own queue. Outputs are broadcast to all connected devices allowing devices respond to configured outputs.
 
-Variable Token replacements supported in output chains:<br>
-
+<h3>Variable Token replacements supported in output chains:</h3>
 <li>#s# = current value of output</li>
 <li>#HEX... = converts hex to integer</li>
 <li>#VAR... = replace ... with a custom variable name you want to use to track values of an output</li>
@@ -19,16 +18,20 @@ Variable Token replacements supported in output chains:<br>
 example:
 #CLWAMMO:00FF00:FFFF00:FF0000#</li>
 
-Action Token replacements supported in output chains:<br>
+<h3>Action Token replacements supported in output chains:</h3>
 <li>%RMP..TO..% =  remaps a value to a different value</li>
 <li>%EVL...% = allows a mathematical equation to be evaluated to change value
 example of cycling between value 1,2 and 3 based on current value: %EVL#s#MOD3+1%</li>
 <li>%RVL...% = replaces itself with the result of a mathematical equation</li>
 
-Timing commands supported in  output chains:
+<h3>Timing commands supported in  output chains:</h3>
 <li>%WAIT…% = will make a pause between commands. This also pauses the queue so waiting too much can expire some commands.</li>
 <li>%TIME…% = will make anything after it go into a timeout queue where it will be added back into the process queue when the time is up to resume. This does not prevent the queue from processing like wait.</li>  
 <li>%TIMR…% = is like TIME but with a refresh. Whatever follows it will go back into the queue when the timer expires, but if the command is queued again before that happens it will refresh the timer. Used for turning off stuff after a repeated commands. NOTE: this will not work if any dynamic commands are used after it in the chain.</li>  
+
+<h3>Exclusion commands supported in  output chains:</h3>
+<li>[...::..] = add [] around parts to exclude by values defined after "::" separated by ":". Example: [%FLASH_LED%::99:0]. This part of the command will be skipped if value is 99 or 0.</li>
+
 
 <h2>Program Configuration</h2>
 
@@ -74,4 +77,6 @@ If an output of "P1_Ammo" has a value of 10 it will use the last value configure
 
 
 
+<h2>Troubleshooting</h2>
 
+To monitor the commands being assembled from the configuration  enable monitoring on each device to monitor in the blasty.ini by putting a 1 on the monitor option. Next in the game configuration put a 1 for the monitor option in the general section.
