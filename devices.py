@@ -23,7 +23,6 @@ class Device:
         self.max_rate = 1 / (float(self.general_config['MaxRate']) or 10)
         self.output_queue = queue.Queue()
         self.send_queue = queue.Queue()
-        self.block = []
         self.temp_vars = {}
         self.enabled = True
         self.pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
@@ -105,8 +104,8 @@ class Device:
                        int(lerp(hex_rgb(transitions[int(t)][0])[2], hex_rgb(transitions[int(t)][1])[2], t - int(t))))
 
     def sub_var_tokens(self, out, val):
-        if self.monitor and bool(int(self.general_config['Monitor'])):
-            print(self.init['port'], out)
+        # if self.monitor and bool(int(self.general_config['Monitor'])):
+        #     print(self.init['port'], out)
 
         match = regex_patterns.var_token.search(out)
         while match is not None:
@@ -148,7 +147,7 @@ class Device:
         if self.monitor and bool(int(self.general_config['Monitor'])):
             print(self.init['port'], out)
 
-        return out
+        return out.strip(',')
 
     def sub_tokens(self, output, value):
         out = self.get_output(self.output_config, output, value)
@@ -156,6 +155,7 @@ class Device:
         if self.monitor and bool(int(self.general_config['Monitor'])):
             print(self.init['port'], out)
 
+        out = self.sub_var_tokens(out, value)
         match = regex_patterns.token.search(out)
         while match is not None:
             match match.group(0):
@@ -201,90 +201,86 @@ class Device:
             return config[output].split('|')[int(value)]
         return config[output].split('|')[-1]
 
-    def get_window_time(self):
-        return time.perf_counter_ns() + (self.max_rate * 1000000000 * .25)
+    def get_max_time(self, data_time):
+        return int(data_time + (self.max_rate * 1000000000))
 
     def process_output_queue(self):
         try:
             time_queue = {}
+            blocks = {}
+            ready_queue = queue.Queue()
             while True:
-                window_time = self.get_window_time()
-                if time_queue or not self.output_queue.empty():
-                    window_queue = queue.Queue()
-                    ready_queue = queue.Queue()
-                    block_list = []
+                while not self.output_queue.empty():
+                    output, value, data_time = self.output_queue.get()
 
-                    if time_queue:
-                        for c in list(time_queue):
-                            if time.perf_counter_ns() > int(c):
-                                ready_queue.put(c)
+                    if output not in self.output_config:
+                        continue
 
-                    while not self.output_queue.empty():
-                        window_queue.put(self.output_queue.get())
+                    if self.monitor and bool(int(self.general_config['Monitor'])):
+                        print(self.init['port'], "PROCESS:", output, value)
 
-                    while not ready_queue.empty() or not window_queue.empty():
-                        out = None
-                        output = None
-                        data_time = None
+                    out = self.sub_tokens(output, value)
 
-                        if not ready_queue.empty():
-                            data_time = time.perf_counter_ns()
-                            out = time_queue.pop(ready_queue.get())
+                    if self.monitor and bool(int(self.general_config['Monitor'])):
+                        print(self.init['port'], "RESULT: ", out)
 
-                        elif not window_queue.empty():
-                            output, value, data_time = window_queue.get()
+                    if out:
+                        time_queue[time.perf_counter_ns()] = (out, data_time, 0)
 
-                            if output not in self.output_config:
-                                if self.monitor and bool(int(self.general_config['Monitor'])):
-                                    print(self.init['port'], output, value)
-                                continue
+                for c in list(time_queue):
+                    if time.perf_counter_ns() > int(c):
+                        ready_queue.put(c)
 
-                            if self.monitor and bool(int(self.general_config['Monitor'])):
-                                print(self.init['port'], output, value)
+                for b in list(blocks):
+                    if time.perf_counter_ns() > int(blocks[b]):
+                        del blocks[b]
 
-                            out = self.sub_tokens(output, value)
+                while not ready_queue.empty():
+                    # print(time_queue)
+                    expired = False
+                    out, data_time, offset = time_queue.pop(ready_queue.get())
 
-                        if not out:
-                            continue
+                    if time.perf_counter_ns() > (self.get_max_time(data_time) + offset):
+                        expired = True
+                    elif out in blocks:
+                        time_queue[time.perf_counter_ns()] = (out, data_time, offset)
+                        continue
+                    else:
+                        blocks[out] = self.get_max_time(time.perf_counter_ns())
 
-                        if out in block_list:
-                            continue
+                    for i, o in enumerate(out.split(',')):
+                        if o[:3] not in self.filter:
+                            match = regex_patterns.reval.search(o)
+                            if match is not None and not expired:
+                                match match.group(1):
+                                    case _ if match.group(1)[:4] == 'WAIT':
+                                        time.sleep(int(match.group(1)[4:]) * .001)
+                                        continue
+                                    case _ if match.group(1)[:4] == 'TIME':
+                                        time_queue[
+                                            time.perf_counter_ns() + int(match.group(1)[4:]) * 1000000] = (",".join(
+                                             out.split(',')[i + 1:]), data_time, offset + int(match.group(1)[4:]) * 1000000)
+                                    case _ if match.group(1)[:4] == 'TIMR':
+                                        rem = ",".join(out.split(',')[i + 1:])
+                                        for c in list(time_queue):
+                                            if time_queue[c][0] == rem:
+                                                del time_queue[c]
 
-                        block_list.append(out)
+                                        time_queue[
+                                            time.perf_counter_ns() + int(match.group(1)[4:]) * 1000000] = (",".join(
+                                             out.split(',')[i + 1:]), data_time, offset + int(match.group(1)[4:]) * 1000000)
+                                    case _:
+                                        pass
+                                break
 
-                        for i, o in enumerate(out.split(',')):
-                            if o[:3] not in self.filter:
-                                match = regex_patterns.reval.search(o)
-                                if match is not None:
-                                    match match.group(1):
-                                        case _ if match.group(1)[:4] == 'WAIT':
-                                            self.block.append(output)
-                                            time.sleep(int(match.group(1)[4:]) * .001)
-                                            self.block.remove(output)
-                                            continue
-                                        case _ if match.group(1)[:4] == 'TIME':
-                                            time_queue[time.perf_counter_ns() + int(match.group(1)[4:]) * 1000000] = ",".join(out.split(',')[i + 1:])
-                                        case _ if match.group(1)[:4] == 'TIMR':
-                                            rem = ",".join(out.split(',')[i + 1:])
-                                            for c in list(time_queue):
-                                                if time_queue[c] == rem:
-                                                    del time_queue[c]
+                            if self.enabled:
+                                self.add_to_send_queue(Command(self.comm, o, data_time, expired))
 
-                                            time_queue[time.perf_counter_ns() + int(match.group(1)[4:]) * 1000000] = ",".join(out.split(',')[i + 1:])
-                                        case _:
-                                            pass
-                                    break
-
-                                if self.enabled:
-                                    self.add_to_send_queue(Command(self.comm, o, window_time, data_time))
-
-                time.sleep(self.max_rate)
+                time.sleep(.000001)
         except Exception as e:
             print(getattr(e, 'message', repr(e)))
 
     def add_to_output_queue(self, out, val, data_time):
-        if self.block and out in self.block:
-            return
         self.output_queue.put((out, val, data_time))
         if not self.t1.running():
             print('RESTARTING t1', str(self.player_id))
@@ -309,12 +305,12 @@ class Device:
     def start(self):
         if 'MameStart' in self.general_config:
             self.enabled = True
-            self.add_to_send_queue(Command(self.comm, self.general_config['MameStart'], self.get_window_time()))
+            self.add_to_send_queue(Command(self.comm, self.general_config['MameStart']))
 
     def stop(self):
         if 'MameStop' in self.general_config:
             self.enabled = False
-            self.add_to_send_queue(Command(self.comm, self.general_config['MameStop'], self.get_window_time()))
+            self.add_to_send_queue(Command(self.comm, self.general_config['MameStop']))
 
     def pause(self, val):
         self.enabled = bool(val)
@@ -350,3 +346,4 @@ class Device:
         self.output_config = {key: config['Output'][key] for key in config['Output'] if config['Output'][key]
                               if not regex_patterns.player.match(key) or
                               key[:2] == "P" + str(self.player_id) or key[:7] == "Player" + str(self.player_id)}
+        self.max_rate = 1 / (float(self.general_config['MaxRate']) or 10)

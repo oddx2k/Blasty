@@ -26,8 +26,8 @@ example of cycling between value 1,2 and 3 based on current value: %EVL#s#MOD3+1
 <li>%RVL...% = replaces itself with the result of a mathematical equation</li>
 
 Timing commands supported in  output chains:
-<li>%WAIT…% = will make a pause between commands. This also pauses the queue so waiting too much will push some commands out of the queue window.</li>
-<li>%TIME…% = will make anything after it go into a timeout queue where it will be added back into the process queue when the time is up to resume. This does not prevent the queue from processing like wait but commands with longer timers may end up in other queue windows.</li>  
+<li>%WAIT…% = will make a pause between commands. This also pauses the queue so waiting too much can expire some commands.</li>
+<li>%TIME…% = will make anything after it go into a timeout queue where it will be added back into the process queue when the time is up to resume. This does not prevent the queue from processing like wait.</li>  
 <li>%TIMR…% = is like TIME but with a refresh. Whatever follows it will go back into the queue when the timer expires, but if the command is queued again before that happens it will refresh the timer. Used for turning off stuff after a repeated commands. NOTE: this will not work if any dynamic commands are used after it in the chain.</li>  
 
 <h2>Program Configuration</h2>

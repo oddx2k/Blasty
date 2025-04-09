@@ -3,27 +3,22 @@ import time
 
 
 class Command:
-    def __init__(self, comm, command, window_time, data_time=None):
+    def __init__(self, comm, command, data_time=None, expired=False):
         self.comm = comm
         self.serial_command = command
         self.data_time = data_time or time.perf_counter_ns()
-        self.window_time = window_time or time.perf_counter_ns()
+        self.expired = expired
 
     def send_serial(self):
-        if time.perf_counter_ns() > self.window_time:
-            print(self.serial_command, 'window expired')
-            return
-
         if self.serial_command is None:
             return
         try:
-            self.comm.write(bytes(self.serial_command.encode()))
+            if not self.expired:
+                self.comm.write(bytes(self.serial_command.encode()))
+
+            # print(self.data_time, time.perf_counter_ns(), self.serial_command, self.expired)
             # tmp = self.comm.readline()
         except (OSError, serial.SerialTimeoutException):
             self.comm.close()
             self.comm.open()
             print(self.comm.port, 'REOPENED')
-        # print(self.get_age())
-
-    def get_age(self):
-        return int((time.perf_counter_ns() - self.data_time) / 1000)  # in μs
