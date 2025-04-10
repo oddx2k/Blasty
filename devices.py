@@ -9,11 +9,12 @@ from command import Command
 
 
 class Device:
-    def __init__(self, player_id, profile, init, monitor=0):
+    def __init__(self, player_id, profile, init, monitor=None):
         self.player_id = player_id
         self.profile = profile
-        self.monitor = bool(int(monitor))
         self.init = init
+        self.monitor = True if monitor.upper() == 'TRUE' or monitor.isnumeric() and int(monitor) > 0 else False
+        self.mon_level = 0
         self.comm = self.open_com()
         self.full_config = {}
         self.general_config = {}
@@ -106,15 +107,15 @@ class Device:
     def skip_value(self, out, val):
         match = regex_patterns.skip.search(out)
         while match is not None:
-            var_skp = match.group(2).split(':')
+            var_skp = match.group(1).split('::')[-1].split(':') or []
             if val in var_skp:
                 out = regex_patterns.skip.sub('', out, 1)
             else:
-                out = regex_patterns.skip.sub(match.group(1), out, 1)
+                out = regex_patterns.skip.sub(match.group(1).split('::')[0], out, 1)
 
             match = regex_patterns.skip.search(out)
 
-            if self.monitor and bool(int(self.general_config['Monitor'])):
+            if self.mon_level == 1:
                 print(self.init['port'], out)
 
         return out
@@ -160,7 +161,7 @@ class Device:
 
             match = regex_patterns.var_token.search(out)
 
-        if self.monitor and bool(int(self.general_config['Monitor'])):
+        if self.mon_level == 1:
             print(self.init['port'], out)
 
         return out.strip(',')
@@ -168,7 +169,7 @@ class Device:
     def sub_tokens(self, output, value):
         out = self.get_output(self.output_config, output, value)
 
-        if self.monitor and bool(int(self.general_config['Monitor'])):
+        if self.mon_level == 1:
             print(self.init['port'], out)
 
         out = self.skip_value(out, value)
@@ -207,7 +208,7 @@ class Device:
             match = regex_patterns.token.search(out)
         out = regex_patterns.extra_comma.sub(r',', out)
 
-        if self.monitor and bool(int(self.general_config['Monitor'])):
+        if self.mon_level == 1:
             print(self.init['port'], out)
 
         return out
@@ -234,12 +235,12 @@ class Device:
                     if output not in self.output_config:
                         continue
 
-                    if self.monitor and bool(int(self.general_config['Monitor'])):
+                    if self.mon_level == 1:
                         print(self.init['port'], "PROCESS:", output, value)
 
                     out = self.sub_tokens(output, value)
 
-                    if self.monitor and bool(int(self.general_config['Monitor'])):
+                    if self.mon_level == 1:
                         print(self.init['port'], "RESULT: ", out)
 
                     if out:
@@ -301,7 +302,7 @@ class Device:
     def add_to_output_queue(self, out, val, data_time):
         self.output_queue.put((out, val, data_time))
         if not self.t1.running():
-            print('RESTARTING t1', str(self.player_id))
+            print(self.init['port'], 'RESTARTING process_output_queue')
             self.t1 = self.pool.submit(self.process_output_queue)
 
     def process_send_queue(self):
@@ -309,15 +310,16 @@ class Device:
             while True:
                 while not self.send_queue.empty():
                     cmd = self.send_queue.get()
+                    cmd.monitor = self.mon_level
                     cmd.send_serial()
-                time.sleep(.0000000001)
+                time.sleep(.000001)
         except Exception as e:
             print(getattr(e, 'message', repr(e)))
 
     def add_to_send_queue(self, command):
         self.send_queue.put(command)
         if not self.t2.running():
-            print('RESTARTING t2', str(self.player_id))
+            print(self.init['port'], 'RESTARTING process_send_queue')
             self.t2 = self.pool.submit(self.process_send_queue)
 
     def start(self):
@@ -364,4 +366,13 @@ class Device:
         self.output_config = {key: config['Output'][key] for key in config['Output'] if config['Output'][key]
                               if not regex_patterns.player.match(key) or
                               key[:2] == "P" + str(self.player_id) or key[:7] == "Player" + str(self.player_id)}
+
         self.max_rate = 1 / (float(self.general_config['MaxRate']) or 10)
+        if self.monitor and 'Monitor' in self.general_config:
+            match self.general_config['Monitor']:
+                case 'False':
+                    self.mon_level = 0
+                case 'True':
+                    self.mon_level = 1
+                case _:
+                    self.mon_level = int(self.general_config['Monitor']) if self.general_config['Monitor'].isnumeric() else 0

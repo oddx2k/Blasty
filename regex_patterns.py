@@ -2,7 +2,7 @@ import re
 
 token = re.compile(r'%(.*?)%')
 var_token = re.compile(r'#(.*?)#', re.IGNORECASE)
-skip = re.compile(r'\[(.*?)::([:\d]+)]', re.IGNORECASE)
+skip = re.compile(r'\[(.*?)]', re.IGNORECASE)
 eval_filter = re.compile(r'[^0-9%*/+-.()]')
 hex_filter = re.compile(r'^[0-9a-fA-F]+$')
 reval = re.compile(r'\((.*?)\)')

@@ -8,6 +8,7 @@ class Command:
         self.serial_command = command
         self.data_time = data_time or time.perf_counter_ns()
         self.expired = expired
+        self.monitor = None
 
     def send_serial(self):
         if self.serial_command is None:
@@ -16,7 +17,8 @@ class Command:
             if not self.expired:
                 self.comm.write(bytes(self.serial_command.encode()))
 
-            # print(self.data_time, time.perf_counter_ns(), self.serial_command, self.expired)
+            if self.monitor == 2:
+                print(self.data_time, time.perf_counter_ns(), self.serial_command, self.expired)
             # tmp = self.comm.readline()
         except (OSError, serial.SerialTimeoutException):
             self.comm.close()
