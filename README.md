@@ -79,4 +79,4 @@ If an output of "P1_Ammo" has a value of 10 it will use the last value configure
 
 <h2>Troubleshooting</h2>
 
-To monitor the commands being assembled from the configuration  enable monitoring on each device to monitor in the blasty.ini by putting a 1 on the monitor option. Next in the game configuration put a 1 for the monitor option in the general section.
+To monitor the commands being assembled from the configuration  enable monitoring on each device to monitor in the blasty.ini by putting a 1 on the monitor option. Next in the game configuration put a 1 for the monitor option in the general section. To see serial command timing and expired status put a 2 for monitoring in game configuration.
