@@ -4,7 +4,7 @@ import time
 import serial
 import regex_patterns
 from serial.tools import list_ports
-from configuration import get_game_config
+from configuration import GameConfig
 from command import Command
 
 
@@ -21,7 +21,7 @@ class Device:
         self.key_states_config = {}
         self.output_config = {}
         self.load_config('default')
-        self.max_rate = 1 / (float(self.general_config['MaxRate']) or 10)
+        self.max_rate = 1 / 10
         self.output_queue = queue.Queue()
         self.send_queue = queue.Queue()
         self.temp_vars = {}
@@ -121,9 +121,6 @@ class Device:
         return out
 
     def sub_var_tokens(self, out, val):
-        # if self.monitor and bool(int(self.general_config['Monitor'])):
-        #     print(self.init['port'], out)
-
         match = regex_patterns.var_token.search(out)
         while match is not None:
             match match.group(0):
@@ -148,12 +145,19 @@ class Device:
 
                 case _ if match.group(1)[:3] == 'CLW':
                     var_clw = match.group(1)[3:].split(':')
+                    rgb_vars = None
+                    if ',' in var_clw[0]:
+                        rgb_vars = var_clw.pop(0).split(',')
+                        print(rgb_vars)
                     var_max = self.get_var_max(var_clw.pop(0))
                     var_clw = [v for v in var_clw if regex_patterns.hex_filter.match(v) and
                                len(regex_patterns.hex_filter.match(v).group(0)) == 6]
                     color = 0
                     if var_max:
                         color = int(self.var_color_wheel(var_clw, var_max, val), 16)
+                    if rgb_vars:
+                        rgb = ((color >> 16) & 255, (color >> 8) & 255, color & 255)
+                        color = "%s%d%s%d%s%d" % (rgb_vars[0], rgb[0], rgb_vars[1], rgb[1], rgb_vars[2], rgb[2])
                     out = regex_patterns.var_token.sub(str(color), out, 1)
 
                 case _:
@@ -244,7 +248,7 @@ class Device:
                         print(self.init['port'], "RESULT: ", out)
 
                     if out:
-                        time_queue[time.perf_counter_ns()] = (out, data_time, 0)
+                        time_queue[time.perf_counter_ns()] = (output, value, out, data_time, 0)
 
                 for c in list(time_queue):
                     if time.perf_counter_ns() > int(c):
@@ -255,48 +259,48 @@ class Device:
                         del blocks[b]
 
                 while not ready_queue.empty():
-                    # print(time_queue)
                     expired = False
-                    out, data_time, offset = time_queue.pop(ready_queue.get())
+                    output, value, out, data_time, offset = time_queue.pop(ready_queue.get())
 
                     if time.perf_counter_ns() > (self.get_max_time(data_time) + offset):
                         expired = True
-                    elif out in blocks:
-                        time_queue[time.perf_counter_ns()] = (out, data_time, offset)
+                    elif output in blocks:
+                        time_queue[time.perf_counter_ns()] = (output, value, out, data_time, offset)
                         continue
-                    else:
-                        blocks[out] = self.get_max_time(time.perf_counter_ns())
+                    elif output != "" and value != "0":
+                        blocks[output] = self.get_max_time(time.perf_counter_ns())
 
                     for i, o in enumerate(out.split(',')):
                         if o[:3] not in self.filter:
                             match = regex_patterns.reval.search(o)
-                            if match is not None and not expired:
+                            if match is not None:
                                 match match.group(1):
                                     case _ if match.group(1)[:4] == 'WAIT':
                                         time.sleep(int(match.group(1)[4:]) * .001)
                                         continue
                                     case _ if match.group(1)[:4] == 'TIME':
                                         time_queue[
-                                            time.perf_counter_ns() + int(match.group(1)[4:]) * 1000000] = (",".join(
-                                             out.split(',')[i + 1:]), data_time, offset + int(match.group(1)[4:]) * 1000000)
+                                            time.perf_counter_ns() + int(match.group(1)[4:]) * 1000000] = ("", value, ",".join(
+                                             out.split(',')[i + 1:]), data_time, time.perf_counter_ns() - data_time + offset + int(match.group(1)[4:]) * 1000000)
                                     case _ if match.group(1)[:4] == 'TIMR':
                                         rem = ",".join(out.split(',')[i + 1:])
                                         for c in list(time_queue):
-                                            if time_queue[c][0] == rem:
+                                            if time_queue[c][2] == rem:
                                                 del time_queue[c]
 
                                         time_queue[
-                                            time.perf_counter_ns() + int(match.group(1)[4:]) * 1000000] = (",".join(
-                                             out.split(',')[i + 1:]), data_time, offset + int(match.group(1)[4:]) * 1000000)
+                                            time.perf_counter_ns() + int(match.group(1)[4:]) * 1000000] = ("", value, ",".join(
+                                             out.split(',')[i + 1:]), data_time, time.perf_counter_ns() - data_time + offset + int(match.group(1)[4:]) * 1000000)
                                     case _:
                                         pass
                                 break
 
                             if self.enabled:
-                                self.add_to_send_queue(Command(self.comm, o, data_time, expired))
+                                self.add_to_send_queue(Command(self.comm, o, data_time, expired, mon_level=self.mon_level))
 
                 time.sleep(.000001)
         except Exception as e:
+            print(self.init['port'], 'EXCEPTION process_output_queue')
             print(getattr(e, 'message', repr(e)))
 
     def add_to_output_queue(self, out, val, data_time):
@@ -310,10 +314,10 @@ class Device:
             while True:
                 while not self.send_queue.empty():
                     cmd = self.send_queue.get()
-                    cmd.monitor = self.mon_level
                     cmd.send_serial()
                 time.sleep(.000001)
         except Exception as e:
+            print(self.init['port'], 'EXCEPTION process_send_queue')
             print(getattr(e, 'message', repr(e)))
 
     def add_to_send_queue(self, command):
@@ -325,12 +329,12 @@ class Device:
     def start(self):
         if 'MameStart' in self.general_config:
             self.enabled = True
-            self.add_to_send_queue(Command(self.comm, self.general_config['MameStart']))
+            self.add_to_send_queue(Command(self.comm, self.general_config['MameStart'], mon_level=self.mon_level))
 
     def stop(self):
         if 'MameStop' in self.general_config:
             self.enabled = False
-            self.add_to_send_queue(Command(self.comm, self.general_config['MameStop']))
+            self.add_to_send_queue(Command(self.comm, self.general_config['MameStop'], mon_level=self.mon_level))
 
     def pause(self, val):
         self.enabled = bool(val)
@@ -358,16 +362,18 @@ class Device:
         return None
 
     def load_config(self, name):
-        config = get_game_config(name, self.profile)
+        config = GameConfig(name, self.profile).get_config()
         self.full_config = {key: config[section][key] for section in config for key in config[section] if config[section][key]}
         self.general_config = {key: config['General'][key] for key in config['General'] if config['General'][key]}
-        self.key_states_config = {key: config['KeyStates'][key] for key in config['KeyStates'] if
-                                  config['KeyStates'][key]}
+        # self.key_states_config = {key: config['KeyStates'][key] for key in config['KeyStates'] if
+        #                           config['KeyStates'][key]}
         self.output_config = {key: config['Output'][key] for key in config['Output'] if config['Output'][key]
                               if not regex_patterns.player.match(key) or
                               key[:2] == "P" + str(self.player_id) or key[:7] == "Player" + str(self.player_id)}
 
-        self.max_rate = 1 / (float(self.general_config['MaxRate']) or 10)
+        if 'MaxRate' in self.general_config:
+            self.max_rate = 1 / (float(self.general_config['MaxRate']) or 10)
+
         if self.monitor and 'Monitor' in self.general_config:
             match self.general_config['Monitor']:
                 case 'False':

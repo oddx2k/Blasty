@@ -1,13 +1,12 @@
 import socket
-
 import serial
-
 import regex_patterns
 import time
 import sys
 import psutil
 import signal
-from configuration import get_config, update_config, get_game_config, update_game_config
+# from configuration import get_config, update_config, get_game_config, update_game_config
+from configuration import AppConfig, GameConfig
 from devices import Device
 from serial.tools import list_ports
 
@@ -37,8 +36,8 @@ def get_pid(pid, output_providers):
 
 
 def main():
-    update_config()
-    update_game_config(get_game_config('default'), 'default', default=True)
+    AppConfig().update_config()
+    GameConfig().update_config()
 
     pid = None
     DEVICES = []
@@ -54,7 +53,7 @@ def main():
         except Exception as e:
             print(getattr(e, 'message', repr(e)))
 
-        conf = get_config()
+        conf = AppConfig().get_config()
         DEVICES = [device for device in
                    [Device(conf[device]['ID'] or 0,
                            conf[device]['PROFILE'],
@@ -68,14 +67,14 @@ def main():
                                'rtscts': conf[device]['RTSCTS'] or False,
                                'dsrdtr': conf[device]['DSRDTR'] or False,
                            },
-                           conf[device]['MONITOR'],
+                           conf[device]['MONITOR'] or 'False',
                            ) for device in conf
                     if conf[device]['PORT'] and conf[device]['PROFILE'] and
                     conf[device]['PORT'] in [port.device for port in list_ports.comports()]]
                    if device.comm is not None]
 
         for device in DEVICES:
-            update_game_config(get_game_config('default', device.profile), 'default', device.profile, default=True)
+            GameConfig(profile=device.profile).update_config()
 
         game = None
 
@@ -110,8 +109,7 @@ def main():
                             if game:
                                 for device in DEVICES:
                                     device.stop()
-                                update_game_config(get_game_config(game['name']), game['name'],
-                                                   outputs=game['known_outputs'])
+                                GameConfig(game['name']).update_config(outputs=game['known_outputs'])
                         case 'mame_stop':
                             pass
                         case 'pause':

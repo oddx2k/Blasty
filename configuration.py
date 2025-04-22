@@ -2,117 +2,127 @@ import os
 from configparser import ConfigParser
 
 
-def read_config(file):
-    if os.path.exists(file):
-        config = ConfigParser(comment_prefixes='/', allow_no_value=True, interpolation=None)
-        config.optionxform = str
-        config.read(file)
-        return config
+class Config:
+    def __init__(self):
+        pass
 
-    return None
+    def read_config(self, file):
+        if os.path.exists(file):
+            config = ConfigParser(comment_prefixes='/', allow_no_value=True, interpolation=None)
+            config.optionxform = str
+            config.read(file)
+            return config
 
-
-def default_config():
-    defaults = ConfigParser(comment_prefixes='/', allow_no_value=True)
-    defaults.optionxform = str
-    for player in range(1, 5):
-        defaults['Lightgun' + str(player)] = {
-            'ID': '',
-            'PROFILE': '',
-            'MONITOR': 0,
-            'PORT': '',
-            'BAUDRATE': 9600,
-            'BYTESIZE': 8,
-            'PARITY': 'N',
-            'STOPBITS': 1,
-            'TIMEOUT': .01,
-            'RTSCTS': True,
-            'DSRDTR': True,
-        }
-    return defaults
+        return None
 
 
-def default_game_config():
-    defaults = ConfigParser(comment_prefixes='/', allow_no_value=True)
-    defaults.optionxform = str
-    defaults['General'] = {
-        'MameStart': '',
-        'MameStop': '',
-        'StateChange': '',
-        'OnRotate': '',
-        'OnPause': '',
-        'MaxRate': '',
-        'Monitor': 0,
-    }
-    defaults['KeyStates'] = {
-        'RefreshTime': '',
-    }
-    defaults['Output'] = {}
-    return defaults
+class AppConfig(Config):
+    def __init__(self):
+        super().__init__()
+        self.name = 'blasty'
+        self.file_name = self.name + '.ini'
+        self.config = self.read_config(self.file_name) or self.default_config()
 
+    def default_config(self):
+        defaults = ConfigParser(comment_prefixes='/', allow_no_value=True)
+        defaults.optionxform = str
+        for player in range(1, 5):
+            defaults['Lightgun' + str(player)] = {
+                'ID': '',
+                'PROFILE': '',
+                'MONITOR': 0,
+                'PORT': '',
+                'BAUDRATE': 9600,
+                'BYTESIZE': 8,
+                'PARITY': 'N',
+                'STOPBITS': 1,
+                'TIMEOUT': .1,
+                'RTSCTS': True,
+                'DSRDTR': True,
+            }
+        return defaults
 
-def update_config():
-    config_base = default_config()
-    config = read_config('blasty.ini') or default_config()
-    config_file = 'blasty.ini'
+    def update_config(self):
+        config_base = self.default_config()
 
-    updated = False
-    for section in config_base:
-        if section not in config:
-            config[section] = config_base[section]
-            updated = True
-            continue
-        for key in config_base[section]:
-            if key not in config[section]:
-                config[section][key] = config_base[section][key]
+        updated = False
+        for section in config_base:
+            if section not in self.config:
+                self.config[section] = config_base[section]
                 updated = True
-
-    if updated or not os.path.exists(config_file):
-        if not os.path.exists(os.path.split(os.path.abspath(config_file))[0]):
-            os.makedirs(os.path.split(os.path.abspath(config_file))[0], exist_ok=True)
-        with open(config_file, 'w') as f:
-            config.write(f, space_around_delimiters=False)
-
-
-def update_game_config(config, name, profile="", outputs=None, default=False):
-    if default:
-        config_base = default_game_config()
-    else:
-        config_base = read_config(os.path.join('config', profile, 'default' + '.ini')) or default_game_config()
-
-    config_file = os.path.join('config', profile, name + '.ini')
-    updated = False
-    for section in config_base:
-        if section not in config:
-            config[section] = config_base[section]
-            updated = True
-            continue
-        for key in config_base[section]:
-            if key not in config[section]:
-                config[section][key] = config_base[section][key]
-                updated = True
-
-    if outputs is not None:
-        for output in outputs:
-            if all(x.lower() not in output.lower() for x in ["mame_start", "mame_stop", "pause", "Orientation"]):
-                if output not in config['Output'] and "; " + output not in config['Output']:
-                    config['Output']['; ' + output] = '|'.join([x for x in outputs[output]])
+                continue
+            for key in config_base[section]:
+                if key not in self.config[section]:
+                    self.config[section][key] = config_base[section][key]
                     updated = True
 
-    if updated or not os.path.exists(config_file):
-        if not os.path.exists(os.path.split(os.path.abspath(config_file))[0]):
-            os.makedirs(os.path.split(os.path.abspath(config_file))[0], exist_ok=True)
-        with open(config_file, 'w') as f:
-            config.write(f, space_around_delimiters=False)
+        if updated or not os.path.exists(self.file_name):
+            if not os.path.exists(os.path.split(os.path.abspath(self.file_name))[0]):
+                os.makedirs(os.path.split(os.path.abspath(self.file_name))[0], exist_ok=True)
+            with open(self.file_name, 'w') as f:
+                self.config.write(f, space_around_delimiters=False)
+
+    def get_config(self):
+        # config = self.read_config('blasty.ini') or self.default_config()
+        return {section: {key: self.config[section][key] for key in self.config[section]} for section in self.config if
+                self.config[section]}
 
 
-def get_config():
-    # return read_config('blasty.ini') or default_config()
-    config = read_config('blasty.ini') or default_config()
-    return {section: {key: config[section][key] for key in config[section]} for section in config if config[section]}
+class GameConfig(Config):
+    def __init__(self, name='default', profile=None):
+        super().__init__()
+        self.name = name
+        self.profile = profile or ""
+        self.file_name = os.path.join('config', self.profile, self.name + '.ini')
+        self.default_file_name = os.path.join('config', self.profile, 'default' + '.ini')
+        self.config = self.read_config(self.file_name) or self.read_config(self.default_file_name) or self.default_config()
 
+    def default_config(self):
+        defaults = ConfigParser(comment_prefixes='/', allow_no_value=True)
+        defaults.optionxform = str
+        defaults['General'] = {
+            'MameStart': '',
+            'MameStop': '',
+            # 'StateChange': '',
+            # 'OnRotate': '',
+            'OnPause': '',
+            'MaxRate': '',
+            'Monitor': 0,
+        }
+        # defaults['KeyStates'] = {
+        #     'RefreshTime': '',
+        # }
+        defaults['Output'] = {}
+        return defaults
 
-def get_game_config(name, profile=""):
-    return (read_config(os.path.join('config', profile, name + '.ini')) or
-            read_config(os.path.join('config', profile, 'default' + '.ini')) or
-            default_game_config())
+    def update_config(self, outputs=None):
+        config_base = self.default_config()
+
+        updated = False
+        for section in config_base:
+            if section not in self.config:
+                self.config[section] = config_base[section]
+                updated = True
+                continue
+            for key in config_base[section]:
+                if key not in self.config[section]:
+                    self.config[section][key] = config_base[section][key]
+                    updated = True
+
+        if outputs is not None:
+            for output in outputs:
+                if all(x.lower() not in output.lower() for x in ["mame_start", "mame_stop", "pause", "Orientation"]):
+                    # if output not in self.config['Output'] and "; " + output not in self.config['Output']:
+                    self.config['Output']['; ' + output] = '|'.join([x for x in outputs[output]])
+                    updated = True
+
+        if updated or not os.path.exists(self.file_name):
+            if not os.path.exists(os.path.split(os.path.abspath(self.file_name))[0]):
+                os.makedirs(os.path.split(os.path.abspath(self.file_name))[0], exist_ok=True)
+            with open(self.file_name, 'w') as f:
+                self.config.write(f, space_around_delimiters=False)
+
+    def get_config(self):
+        return (self.read_config(self.file_name) or
+                self.read_config(self.default_file_name) or
+                self.default_config())
