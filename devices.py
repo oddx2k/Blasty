@@ -9,13 +9,16 @@ from command import Command
 
 
 class Device:
-    def __init__(self, player_id, profile, init, monitor=None):
+    def __init__(self, player_id, profile, init, vid=None, pid=None, hid_path=None, monitor=None):
         self.player_id = player_id
         self.profile = profile
         self.init = init
+        self.vid = vid
+        self.pid = pid
+        self.hid_path = hid_path
         self.monitor = True if monitor.upper() == 'TRUE' or monitor.isnumeric() and int(monitor) > 0 else False
         self.mon_level = 0
-        self.comm = self.open_com()
+        self.comm = self.open_com() if self.hid_path is None else None
         self.full_config = {}
         self.general_config = {}
         self.key_states_config = {}
@@ -296,7 +299,7 @@ class Device:
                                 break
 
                             if self.enabled:
-                                self.add_to_send_queue(Command(self.comm, o, data_time, expired, mon_level=self.mon_level))
+                                self.add_to_send_queue(Command(self, o, data_time, expired, mon_level=self.mon_level))
 
                 time.sleep(.000001)
         except Exception as e:
@@ -314,7 +317,7 @@ class Device:
             while True:
                 while not self.send_queue.empty():
                     cmd = self.send_queue.get()
-                    cmd.send_serial()
+                    cmd.send()
                 time.sleep(.000001)
         except Exception as e:
             print(self.init['port'], 'EXCEPTION process_send_queue')
@@ -329,12 +332,12 @@ class Device:
     def start(self):
         if 'MameStart' in self.general_config:
             self.enabled = True
-            self.add_to_send_queue(Command(self.comm, self.general_config['MameStart'], mon_level=self.mon_level))
+            self.add_to_send_queue(Command(self, self.general_config['MameStart'], mon_level=self.mon_level))
 
     def stop(self):
         if 'MameStop' in self.general_config:
             self.enabled = False
-            self.add_to_send_queue(Command(self.comm, self.general_config['MameStop'], mon_level=self.mon_level))
+            self.add_to_send_queue(Command(self, self.general_config['MameStop'], mon_level=self.mon_level))
 
     def pause(self, val):
         self.enabled = bool(val)

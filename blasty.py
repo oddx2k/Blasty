@@ -1,14 +1,15 @@
 import socket
 import serial
+
 import regex_patterns
 import time
 import sys
 import psutil
 import signal
-# from configuration import get_config, update_config, get_game_config, update_game_config
 from configuration import AppConfig, GameConfig
 from devices import Device
 from serial.tools import list_ports
+import hid
 
 HOST = "127.0.0.1"
 PORT = 8000
@@ -49,7 +50,8 @@ def main():
 
         try:
             for device in DEVICES:
-                device.comm.close()
+                if device.comm is not None:
+                    device.comm.close()
         except Exception as e:
             print(getattr(e, 'message', repr(e)))
 
@@ -67,11 +69,14 @@ def main():
                                'rtscts': conf[device]['RTSCTS'] or False,
                                'dsrdtr': conf[device]['DSRDTR'] or False,
                            },
+                           [port.vid for port in list_ports.comports() if conf[device]['PORT'] == port.device][-1],
+                           [port.pid for port in list_ports.comports() if conf[device]['PORT'] == port.device][-1],
+                           ([device_dict['path'] for port in list_ports.comports() if port.device == conf[device]['PORT'] for device_dict in hid.enumerate() if device_dict['vendor_id'] == port.vid and device_dict['product_id'] == port.pid and device_dict['usage'] == 5] + [None])[0],
                            conf[device]['MONITOR'] or 'False',
                            ) for device in conf
                     if conf[device]['PORT'] and conf[device]['PROFILE'] and
                     conf[device]['PORT'] in [port.device for port in list_ports.comports()]]
-                   if device.comm is not None]
+                   if device.comm is not None or device.hid_path is not None]
 
         for device in DEVICES:
             GameConfig(profile=device.profile).update_config()
