@@ -8,11 +8,11 @@ hid_rules = {
     # report[0] = REPORT_ID
     # # Enable all update flags
     # report[1] = 0  # EnableRumbleUpdate
-    # report[2] = 0  # EnableRumblePulse
+    # report[2] = 0  # EnableRumbleFFBControl
     # report[3] = 0  # EnableLedUpdate
-    # report[4] = 0  # EnableLedBlink
+    # report[4] = 0  # EnableLedFFBControl
     # report[5] = 0  # EnableRecoilUpdate
-    # report[6] = 0  # EnableRecoilPulse
+    # report[6] = 0  # EnableRecoilFFBControl
     # # Rumble settings
     # report[15] = 0  # Rumble pulses
     # report[16] = 0  # RumbleOnPeriod
@@ -22,80 +22,101 @@ hid_rules = {
     # report[21] = 0  # Green
     # report[22] = 0  # Blue
     # # Flash settings
-    # report[23] = 0  # Flashes
-    # report[24] = 0  # LedFlashOffPeriod
-    # report[26] = 0  # LedFlashOnPeriod
+    # report[23] = 0  # ledIndex
+    # report[24] = 0  # Flashes
+    # report[25] = 0  # LedFlashOffPeriod
+    # report[27] = 0  # LedFlashOnPeriod
     # # Recoil settings
-    # report[28] = 0  # Recoil pulses
-    # report[29] = 0  # RecoilOnPeriod
-    # report[30] = 0  # RecoilOffPeriod
+    # report[29] = 0  # Recoil pulses
+    # report[30] = 0  # RecoilOnPeriod
+    # report[31] = 0  # RecoilOffPeriod
     'BLAMCON':
         {
             'regex': re.compile(r'((?:CM|FB|SM)[.]\d+)(?:[.](\d+))?(?:[.](\d+))?(?:[.](\d+))?'),
+            #  Init
+            'SM.6':
+                {
+                    '0': {
+                        'report': 0x10,
+                        'report_size': 40,
+                        'rules': [(1, ">B", 0),
+                                  (2, ">B", 0),
+                                  (3, ">B", 0),
+                                  (4, ">B", 0),
+                                  (5, ">B", 0),
+                                  (6, ">B", 0)]
+                    },
+                    '_': {
+                        'report': 0x10,
+                        'report_size': 40,
+                        'rules': [(1, ">B", 1),
+                                  (2, ">B", 1),
+                                  (3, ">B", 1),
+                                  (4, ">B", 1),
+                                  (5, ">B", 1),
+                                  (6, ">B", 1)]
+                    },
+                },
             #  Recoil
             'FB.0':
                 {
                     '0': {
-                        'report': 0x10,
-                        'report_size': 39,
-                        'rules': [(5, ">B", 1),
-                                  (6, ">B", 1),
-                                  (28, ">B", 0)]
+                        'report': 0x20,
+                        'report_size': 40,
+                        'rules': [(1, ">B", 1),
+                                  (2, ">B", 0)]
                     },
                     '_': {
-                        'report': 0x10,
-                        'report_size': 39,
-                        'rules': [(5, ">B", 1),
-                                  (6, ">B", 1),
-                                  (28, ">B", lambda a: int(a[1]) if a[1] != '' else 0)]
+                        'report': 0x20,
+                        'report_size': 40,
+                        'rules': [(1, ">B", 1),
+                                  (2, ">B", lambda a: int(a[1]) if a[1] != '' else 0)]
                     },
                 },
             #  Rumble
             'FB.1':
                 {
                     '0': {
-                        'report': 0x10,
-                        'report_size': 39,
+                        'report': 0x21,
+                        'report_size': 40,
                         'rules': [(1, ">B", 1),
-                                  (2, ">B", 1),
-                                  (15, ">B", 0)]
+                                  (2, ">B", 0)]
                     },
                     '_': {
-                        'report': 0x10,
-                        'report_size': 39,
+                        'report': 0x21,
+                        'report_size': 40,
                         'rules': [(1, ">B", 1),
-                                  (2, ">B", 1),
-                                  (15, ">B", lambda a: int(a[1]) if a[1] != '' else 0)]
+                                  (2, ">B", lambda a: int(a[1]) if a[1] != '' else 0)]
                     },
                 },
             #  LED
             'FB.2':
                 {
                     '0': {
-                        'report': 0x10,
-                        'report_size': 39,
-                        'rules': [(3, ">B", 1),
-                                  (4, ">B", 1),
-                                  (20, ">B", 0),
-                                  (21, ">B", 0),
-                                  (22, ">B", 0),
-                                  (23, ">B", 0)]
+                        'report': 0x22,
+                        'report_size': 40,
+                        'rules': [(1, ">B", 1),
+                                  (2, ">B", 0),
+                                  (3, ">B", 0),
+                                  (4, ">B", 0),
+                                  (5, ">B", 0),
+                                  (6, ">B", 0)]
                     },
                     '1': {
-                        'report': 0x10,
-                        'report_size': 39,
-                        'rules': [(3, ">B", 1),
-                                  (4, ">B", 1),
-                                  (20, ">B", 255)],
+                        'report': 0x22,
+                        'report_size': 40,
+                        'rules': [(1, ">B", 1),
+                                  (2, ">B", 255),
+                                  (5, ">B", 0)],
                         '_': {
-                                'report': 0x10,
-                                'report_size': 39,
-                                'rules': [(3, ">B", 1),
-                                          (4, ">B", 1),
-                                          (20, ">B", lambda a: (int(a[2]) >> 16) & 255 if a[2] != '' else 0),
-                                          (21, ">B", lambda a: (int(a[2]) >> 8) & 255 if a[2] != '' else 0),
-                                          (22, ">B", lambda a: int(a[2]) & 255 if a[2] != '' else 0),
-                                          (23, ">B", lambda a: int(a[3]) if a[3] != '' else 0)]
+                                'report': 0x22,
+                                'report_size': 40,
+                                'rules': [(1, ">B", 1),
+                                          (2, ">B", lambda a: (int(a[2]) >> 16) & 255 if a[2] != '' else 0),
+                                          (3, ">B", lambda a: (int(a[2]) >> 8) & 255 if a[2] != '' else 0),
+                                          (4, ">B", lambda a: int(a[2]) & 255 if a[2] != '' else 0),
+                                          (5, ">B", 0),
+                                          (6, ">B", lambda a: int(a[3]) if a[3] != '' else 0)]
                             },
                     },
                 },

@@ -40,6 +40,8 @@ def main():
     AppConfig().update_config()
     GameConfig().update_config()
 
+    # [print(dev) for dev in hid.enumerate()]
+
     pid = None
     DEVICES = []
     while True:
