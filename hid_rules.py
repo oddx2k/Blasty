@@ -40,21 +40,21 @@ hid_rules = {
                         'report': 0x10,
                         'report_size': 40,
                         'rules': [(1, ">B", 0),
-                                  (2, ">B", 0),
+                                  (2, ">B", 2),
                                   (3, ">B", 0),
-                                  (4, ">B", 0),
+                                  (4, ">B", 2),
                                   (5, ">B", 0),
-                                  (6, ">B", 0)]
+                                  (6, ">B", 2)]
                     },
                     '_': {
                         'report': 0x10,
                         'report_size': 40,
                         'rules': [(1, ">B", 1),
-                                  (2, ">B", 1),
+                                  (2, ">B", 3),
                                   (3, ">B", 1),
-                                  (4, ">B", 1),
+                                  (4, ">B", 3),
                                   (5, ">B", 1),
-                                  (6, ">B", 1)]
+                                  (6, ">B", 3)]
                     },
                 },
             #  Recoil
@@ -63,14 +63,12 @@ hid_rules = {
                     '0': {
                         'report': 0x20,
                         'report_size': 40,
-                        'rules': [(1, ">B", 1),
-                                  (2, ">B", 0)]
+                        'rules': [(2, ">B", 0)]
                     },
                     '_': {
                         'report': 0x20,
                         'report_size': 40,
-                        'rules': [(1, ">B", 1),
-                                  (2, ">B", lambda a: int(a[1]) if a[1] != '' else 0)]
+                        'rules': [(2, ">B", lambda a: int(a[1]) if a[1] != '' else 0)]
                     },
                 },
             #  Rumble
@@ -79,14 +77,12 @@ hid_rules = {
                     '0': {
                         'report': 0x21,
                         'report_size': 40,
-                        'rules': [(1, ">B", 1),
-                                  (2, ">B", 0)]
+                        'rules': [(2, ">B", 0)]
                     },
                     '_': {
                         'report': 0x21,
                         'report_size': 40,
-                        'rules': [(1, ">B", 1),
-                                  (2, ">B", lambda a: int(a[1]) if a[1] != '' else 0)]
+                        'rules': [(2, ">B", lambda a: int(a[1]) if a[1] != '' else 0)]
                     },
                 },
             #  LED
@@ -95,8 +91,7 @@ hid_rules = {
                     '0': {
                         'report': 0x22,
                         'report_size': 40,
-                        'rules': [(1, ">B", 1),
-                                  (2, ">B", 0),
+                        'rules': [(2, ">B", 0),
                                   (3, ">B", 0),
                                   (4, ">B", 0),
                                   (5, ">B", 0),
@@ -105,14 +100,12 @@ hid_rules = {
                     '1': {
                         'report': 0x22,
                         'report_size': 40,
-                        'rules': [(1, ">B", 1),
-                                  (2, ">B", 255),
+                        'rules': [(2, ">B", 255),
                                   (5, ">B", 0)],
                         '_': {
                                 'report': 0x22,
                                 'report_size': 40,
-                                'rules': [(1, ">B", 1),
-                                          (2, ">B", lambda a: (int(a[2]) >> 16) & 255 if a[2] != '' else 0),
+                                'rules': [(2, ">B", lambda a: (int(a[2]) >> 16) & 255 if a[2] != '' else 0),
                                           (3, ">B", lambda a: (int(a[2]) >> 8) & 255 if a[2] != '' else 0),
                                           (4, ">B", lambda a: int(a[2]) & 255 if a[2] != '' else 0),
                                           (5, ">B", 0),
